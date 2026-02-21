@@ -7,7 +7,7 @@ line-bot-sdk==3.6.0
 
 # Database
 SQLAlchemy==2.0.35
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.10
 
 # Optimization
 PuLP==2.7.0
