@@ -98,48 +98,72 @@ def handle_message(event: MessageEvent):
     メッセージイベントハンドラー
     """
     try:
-        # ユーザーを取得または作成
-        user = get_or_create_user(event.source.user_id)
-        
-        if not user:
-            line_service.reply_message(
-                event.reply_token,
-                "ユーザー情報の取得に失敗しました。管理者に連絡してください。"
-            )
-            return
-        
-        message_text = event.message.text.strip()
-        
-        # コマンド判定
-        if message_text in ['ヘルプ', 'help', '使い方']:
-            if user.is_manager_or_above():
-                ManagerHandler.show_manager_help(event)
-            else:
-                StaffHandler.show_help(event)
-        
-        elif message_text in ['シフト', 'シフト確認']:
-            StaffHandler.handle_view_shifts(event, user)
-        
-        elif message_text in ['希望', '希望確認']:
-            StaffHandler.handle_view_requests(event, user)
-        
-        elif message_text.startswith('シフト作成'):
-            ManagerHandler.handle_create_shift(event, user)
-        
-        elif message_text == '承認':
-            ManagerHandler.handle_approve_shift(event, user)
-        
-        else:
-            # シフト希望の可能性をチェック
-            from utils.validators import Validators
-            parsed = Validators.parse_shift_request_message(message_text)
+        with DatabaseSession() as session:
+            # ユーザーを取得または作成
+            user = session.query(User).filter(User.line_id == event.source.user_id).first()
             
-            if parsed:
-                StaffHandler.handle_shift_request(event, user)
+            if not user:
+                # 新規ユーザー作成
+                profile = line_service.get_user_profile(event.source.user_id)
+                
+                if profile:
+                    user = User(
+                        line_id=event.source.user_id,
+                        name=profile.get('display_name', '名前未設定'),
+                        role=UserRole.STAFF,
+                        is_active=True
+                    )
+                    session.add(user)
+                    session.commit()
+                    
+                    # ウェルカムメッセージ
+                    welcome_msg = f"""
+ようこそ、{user.name}さん！
+
+シフトBotに登録されました。
+「ヘルプ」と送信すると使い方を確認できます。
+"""
+                    line_service.send_text_message(event.source.user_id, welcome_msg.strip())
+            
+            if not user:
+                line_service.reply_message(
+                    event.reply_token,
+                    "ユーザー情報の取得に失敗しました。管理者に連絡してください。"
+                )
+                return
+            
+            message_text = event.message.text.strip()
+            
+            # コマンド判定
+            if message_text in ['ヘルプ', 'help', '使い方']:
+                if user.is_manager_or_above():
+                    ManagerHandler.show_manager_help(event)
+                else:
+                    StaffHandler.show_help(event)
+            
+            elif message_text in ['シフト', 'シフト確認']:
+                StaffHandler.handle_view_shifts(event, user)
+            
+            elif message_text in ['希望', '希望確認']:
+                StaffHandler.handle_view_requests(event, user)
+            
+            elif message_text.startswith('シフト作成'):
+                ManagerHandler.handle_create_shift(event, user)
+            
+            elif message_text == '承認':
+                ManagerHandler.handle_approve_shift(event, user)
+            
             else:
-                # 認識できないメッセージ
-                help_msg = "メッセージを認識できませんでした。\n「ヘルプ」と送信すると使い方を確認できます。"
-                line_service.reply_message(event.reply_token, help_msg)
+                # シフト希望の可能性をチェック
+                from utils.validators import Validators
+                parsed = Validators.parse_shift_request_message(message_text)
+                
+                if parsed:
+                    StaffHandler.handle_shift_request(event, user)
+                else:
+                    # 認識できないメッセージ
+                    help_msg = "メッセージを認識できませんでした。\n「ヘルプ」と送信すると使い方を確認できます。"
+                    line_service.reply_message(event.reply_token, help_msg)
     
     except Exception as e:
         error_handler.handle_error(
