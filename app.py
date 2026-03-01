@@ -177,11 +177,12 @@ def get_or_create_user(line_id: str) -> User:
                     user = User(
                         line_id=line_id,
                         name=profile.get('display_name', '名前未設定'),
-                        role=UserRole.STAFF,  # デフォルトはスタッフ
+                        role=UserRole.STAFF,
                         is_active=True
                     )
                     session.add(user)
                     session.commit()
+                    session.refresh(user)  # セッション内でリフレッシュ
                     
                     # ウェルカムメッセージ
                     welcome_msg = f"""
@@ -191,6 +192,14 @@ def get_or_create_user(line_id: str) -> User:
 「ヘルプ」と送信すると使い方を確認できます。
 """
                     line_service.send_text_message(line_id, welcome_msg.strip())
+            
+            # Userオブジェクトの属性を取得してから返す
+            if user:
+                session.refresh(user)
+                # セッション外で使用する属性を事前に読み込む
+                _ = user.name
+                _ = user.role
+                _ = user.is_active
             
             return user
     
