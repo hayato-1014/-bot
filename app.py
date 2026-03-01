@@ -236,41 +236,7 @@ def get_or_create_user(line_id: str) -> User:
         )
         return None
 
-@app.route("/admin/set_role/<line_id>/<role>")
-def set_user_role(line_id: str, role: str):
-    """管理者権限設定用（セキュリティ上、初回設定後は削除推奨）"""
-    try:
-        with DatabaseSession() as session:
-            user = session.query(User).filter(User.line_id == line_id).first()
-            if user:
-                if role == 'admin':
-                    user.role = UserRole.ADMIN
-                elif role == 'manager':
-                    user.role = UserRole.MANAGER
-                elif role == 'leader':
-                    user.role = UserRole.LEADER
-                elif role == 'staff':
-                    user.role = UserRole.STAFF
-                session.commit()
-                return f'✅ {user.name}の権限を{role}に変更しました'
-            else:
-                return '❌ ユーザーが見つかりません'
-    except Exception as e:
-        return f'❌ エラー: {str(e)}'
 
-
-@app.route("/admin/list_users")
-def list_users():
-    """全ユーザー一覧"""
-    try:
-        with DatabaseSession() as session:
-            users = session.query(User).all()
-            result = []
-            for user in users:
-                result.append(f'{user.name} (LINE ID: {user.line_id}, 権限: {user.role.value})')
-            return '<br>'.join(result)
-    except Exception as e:
-        return f'❌ エラー: {str(e)}'
 if __name__ == "__main__":
     # 開発環境での実行
     port = int(os.environ.get('PORT', 5000))
