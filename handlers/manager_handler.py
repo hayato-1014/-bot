@@ -182,3 +182,137 @@ class ManagerHandler:
 → シフト統計を表示
 """
         line_service.reply_message(event.reply_token, help_message.strip())
+@staticmethod
+    def handle_list_staff(event, user):
+        """スタッフ一覧表示"""
+        if not user.is_admin():
+            line_service.reply_message(
+                event.reply_token,
+                "この機能は管理者のみ使用できます。"
+            )
+            return
+        
+        try:
+            with DatabaseSession() as session:
+                users = session.query(User).order_by(User.role.desc(), User.name).all()
+                
+                if not users:
+                    line_service.reply_message(event.reply_token, "登録ユーザーがいません。")
+                    return
+                
+                # 権限ごとにグループ化
+                role_groups = {
+                    UserRole.ADMIN: [],
+                    UserRole.MANAGER: [],
+                    UserRole.LEADER: [],
+                    UserRole.SUB_LEADER: [],
+                    UserRole.STAFF: []
+                }
+                
+                for u in users:
+                    role_groups[u.role].append(u)
+                
+                # メッセージ作成
+                msg_parts = ["【スタッフ一覧】\n"]
+                
+                role_names = {
+                    UserRole.ADMIN: "👑 管理者",
+                    UserRole.MANAGER: "📊 マネージャー",
+                    UserRole.LEADER: "⭐ リーダー",
+                    UserRole.SUB_LEADER: "✨ サブリーダー",
+                    UserRole.STAFF: "👤 スタッフ"
+                }
+                
+                for role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.LEADER, UserRole.SUB_LEADER, UserRole.STAFF]:
+                    if role_groups[role]:
+                        msg_parts.append(f"\n{role_names[role]}")
+                        for u in role_groups[role]:
+                            status = "✅" if u.is_active else "❌"
+                            msg_parts.append(f"  {status} {u.name}")
+                
+                msg_parts.append("\n\n権限変更: 「権限変更 名前 権限」")
+                msg_parts.append("例: 権限変更 田中太郎 manager")
+                
+                line_service.reply_message(event.reply_token, "\n".join(msg_parts))
+        
+        except Exception as e:
+            error_handler.handle_error(
+                e,
+                ErrorLevel.ERROR,
+                ErrorCategory.BUSINESS_LOGIC
+            )
+            line_service.reply_message(
+                event.reply_token,
+                "エラーが発生しました。"
+            )
+    
+    @staticmethod
+    def handle_change_role(event, user, target_name: str, new_role: str):
+        """ユーザー権限変更"""
+        if not user.is_admin():
+            line_service.reply_message(
+                event.reply_token,
+                "この機能は管理者のみ使用できます。"
+            )
+            return
+        
+        # 権限マッピング
+        role_map = {
+            'admin': UserRole.ADMIN,
+            'manager': UserRole.MANAGER,
+            'leader': UserRole.LEADER,
+            'sub_leader': UserRole.SUB_LEADER,
+            'subleader': UserRole.SUB_LEADER,
+            'staff': UserRole.STAFF
+        }
+        
+        new_role_lower = new_role.lower()
+        
+        if new_role_lower not in role_map:
+            line_service.reply_message(
+                event.reply_token,
+                f"権限が不正です。\n使用可能: admin, manager, leader, sub_leader, staff"
+            )
+            return
+        
+        try:
+            with DatabaseSession() as session:
+                target_user = session.query(User).filter(User.name == target_name).first()
+                
+                if not target_user:
+                    line_service.reply_message(
+                        event.reply_token,
+                        f"ユーザー「{target_name}」が見つかりません。"
+                    )
+                    return
+                
+                old_role = target_user.role
+                target_user.role = role_map[new_role_lower]
+                session.commit()
+                
+                role_names = {
+                    UserRole.ADMIN: "管理者",
+                    UserRole.MANAGER: "マネージャー",
+                    UserRole.LEADER: "リーダー",
+                    UserRole.SUB_LEADER: "サブリーダー",
+                    UserRole.STAFF: "スタッフ"
+                }
+                
+                msg = f"✅ 権限変更完了\n\n{target_user.name}\n{role_names[old_role]} → {role_names[target_user.role]}"
+                
+                line_service.reply_message(event.reply_token, msg)
+                
+                # 対象ユーザーに通知
+                notify_msg = f"あなたの権限が変更されました。\n新しい権限: {role_names[target_user.role]}"
+                line_service.send_text_message(target_user.line_id, notify_msg)
+        
+        except Exception as e:
+            error_handler.handle_error(
+                e,
+                ErrorLevel.ERROR,
+                ErrorCategory.BUSINESS_LOGIC
+            )
+            line_service.reply_message(
+                event.reply_token,
+                "エラーが発生しました。"
+            )
