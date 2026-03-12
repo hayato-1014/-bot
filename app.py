@@ -152,7 +152,22 @@ def handle_message(event: MessageEvent):
             
             elif message_text == '承認':
                 ManagerHandler.handle_approve_shift(event, user)
+                
+            elif message_text == 'スタッフ一覧':
+                ManagerHandler.handle_list_staff(event, user)
             
+            elif message_text.startswith('権限変更'):
+                # 「権限変更 名前 権限」の形式
+                parts = message_text.split()
+                if len(parts) == 3:
+                    target_name = parts[1]
+                    new_role = parts[2]
+                    ManagerHandler.handle_change_role(event, user, target_name, new_role)
+                else:
+                    line_service.reply_message(
+                        event.reply_token,
+                        "使い方: 権限変更 名前 権限\n例: 権限変更 田中太郎 manager"
+                    )
             else:
                 # シフト希望の可能性をチェック
                 from utils.validators import Validators
