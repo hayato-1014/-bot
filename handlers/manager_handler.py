@@ -4,7 +4,7 @@
 """
 from linebot.models import MessageEvent
 from datetime import datetime, timedelta
-from models.user import User, Permission
+from models.user import User, Permission, UserRole
 from models.shift_request import ShiftRequest, RequestStatus
 from services.shift_optimizer import ShiftOptimizer
 from services.shift_approval import ShiftApprovalService
